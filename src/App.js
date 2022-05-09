@@ -1,50 +1,16 @@
-import React, { useState, useEffect } from "react";
+import PhoneInput from './PhoneInput'
+import './App.css'
 
 function App() {
-  const [inputType, setInputType] = useState("text");
-  const [value, setValue] = useState("");
-  const inputTel = React.createRef();
-  const inputText = React.createRef();
-  const handleChange = (e) => {
-    const theValue = (e.target.value || '').trim();
-    if (isNaN(theValue) || theValue === '') {
-      setInputType("text");
-    } else {
-      setInputType("tel");
-    }
-    setValue(theValue);
-  };
-
-  useEffect(() => {
-    if (inputType === "tel") {
-      inputTel.current.focus();
-    } else {
-      inputText.current.focus();
-    }
-  }, [inputType]);
+  const handleChange = value => {
+    console.log(value)
+  }
 
   return (
-    <>
-      {inputType === "tel" && (
-        <input
-          ref={inputTel}
-          name="phone input"
-          type="tel"
-          value={value}
-          onChange={handleChange}
-        />
-      )}
-      {inputType === "text" && (
-        <input
-          ref={inputText}
-          name="phone input"
-          value={value}
-          type="text"
-          onChange={handleChange}
-        />
-      )}
-    </>
-  );
+    <div className="app-container">
+      <PhoneInput onChange={handleChange} />
+    </div>
+  )
 }
 
-export default App;
+export default App
