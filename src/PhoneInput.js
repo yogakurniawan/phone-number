@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { FlagIcon } from 'react-flag-kit'
-import countries from 'country-data'
+import { Globe } from 'phosphor-react'
+import PropTypes from 'prop-types'
+import countryData from 'country-data'
+import parsePhoneNumber, { isPossiblePhoneNumber, AsYouType } from 'libphonenumber-js'
 import escapeStringRegexp from 'escape-string-regexp'
-import { AsYouTypeFormatter, PhoneNumberUtil, PhoneNumberFormat } from 'google-libphonenumber'
+import { ButtonFlag, TextInput, Dropdown, DropdownList, ListItem } from './styles'
 
 function PhoneInput({
   disabled,
@@ -14,12 +16,19 @@ function PhoneInput({
   minLengthMessage,
   maxLengthMessage,
   catchAllMessage,
-  onChange
+  onChange,
+  error,
+  maxHeight,
+  dataTestId,
+  inputName,
+  onKeyDown,
+  defaultCountry,
+  value
 }) {
-  const phoneUtil = PhoneNumberUtil.getInstance()
   const [inputType, setInputType] = useState('text')
   const [searchTerm, setSearchTerm] = useState('')
   const [intlPhoneNumber, setIntlPhoneNumber] = useState('')
+  const [localPlaceholder, setLocalPlaceholder] = useState('')
   const [hoverIndex, setHoverIndex] = useState('text')
   const [selectedCountry, setSelectedCountry] = useState({})
   const [open, setOpen] = useState(false)
@@ -31,7 +40,7 @@ function PhoneInput({
   const [phoneNumber, setPhoneNumber] = useState('')
   const [message, setMessage] = useState('')
   const [valid, setValid] = useState(false)
-  const [value, setValue] = useState('')
+  // const [value, setValue] = useState('')
   const inputTel = useRef()
   const inputText = useRef()
   const mouseDownOnMenu = useRef()
@@ -39,8 +48,9 @@ function PhoneInput({
   const phoneInputRef = useRef()
   const { alpha2 } = selectedCountry
   const missingFlags = { AQ: 'WW', BQ: 'NL', EH: 'WW-AFR', MF: 'FR', SH: 'GB' }
-  const assignedCountries = countries.callingCountries.all.filter(country => country.status === 'assigned')
+  const assignedCountries = countryData.callingCountries.all.filter(country => country.status === 'assigned')
   const tabbedCountry = filteredCountries.length > 0 && filteredCountries[0].alpha2
+  const bgColorTransitionStyle = 'background-color .25s, color .25s'
   const flag =
     (missingFlags[alpha2]
       ? missingFlags[alpha2]
@@ -75,18 +85,17 @@ function PhoneInput({
     return theNumber ? theNumber.replace(/[^0-9]/g, '') : number
   }
 
-  const getNationalNumber = (alpha2, number) => {
-    return number && alpha2 && alpha2.length ? number.substr(alpha2.length + 1) : ''
+  const getNationalNumber = (country, number) => {
+    const { countryCallingCodes } = country
+    return number && countryCallingCodes && countryCallingCodes.length
+      ? number.substr(countryCallingCodes[0].length)
+      : ''
   }
 
   const formatNumber = (alpha2, number) => {
-    const unformattedNumber = unformatNumber(number)
-    const formatter = new AsYouTypeFormatter(alpha2)
-    const formattedNumberArray = `+${number}`.split('').map(char => formatter.inputDigit(char))
-    const intlPhoneNumber = formattedNumberArray.length
-      ? formattedNumberArray[formattedNumberArray.length - 1]
-      : unformattedNumber
-    formatter.clear()
+    const formatter = new AsYouType(alpha2)
+    const formattedNumberArray = `+${number}`.split('').map(char => formatter.input(char))
+    const intlPhoneNumber = formattedNumberArray.length ? formattedNumberArray[formattedNumberArray.length - 1] : number
     return {
       intlPhoneNumber,
       callingCode: intlPhoneNumber.split(' ')[0]
@@ -96,9 +105,9 @@ function PhoneInput({
   const lookupCountry = callingCode => {
     const _callingCode = callingCode.toString().trim()
     if (_callingCode === '1') {
-      return countries.countries.US
+      return countryData.countries.US
     } else {
-      return countries.lookup
+      return countryData.lookup
         .countries({
           countryCallingCodes: `${_callingCode.charAt(0) === '+' ? _callingCode : '+'.concat(_callingCode)}`
         })
@@ -135,16 +144,14 @@ function PhoneInput({
   const validateNumber = (alpha2, phoneNumber) => {
     if (alpha2) {
       const _alpha2 = alpha2 === 'unknown' ? '' : alpha2
-      try {
-        phoneUtil.parse(phoneNumber, _alpha2)
-      } catch (e) {
-        const { message } = e
+      const parsed = parsePhoneNumber(phoneNumber, _alpha2)
+      if (parsed) {
+        const valid = isPossiblePhoneNumber(phoneNumber, _alpha2)
+        const intlPhoneNumber = parsed.formatInternational()
+        return formatValidation(valid, '', valid ? validMessage : mapErrorMessage(), parsed, intlPhoneNumber)
+      } else {
         return formatValidation(false, message, mapErrorMessage(message), null, null)
       }
-      const parsed = phoneUtil.parse(phoneNumber, _alpha2)
-      const valid = phoneUtil.isPossibleNumber(parsed)
-      const intlPhoneNumber = phoneUtil.format(parsed, PhoneNumberFormat.INTERNATIONAL)
-      return formatValidation(valid, '', valid ? validMessage : mapErrorMessage(), parsed, intlPhoneNumber)
     } else {
       return formatValidation(false, '', callingCodeMessage, null, null)
     }
@@ -195,21 +202,20 @@ function PhoneInput({
     if (Object.keys(country).length > 0) {
       const { countryCallingCodes, alpha2 } = country
       const callingCode = countryCallingCodes && countryCallingCodes[0]
-      const _intlPhoneNumber = mounted
-        ? intlPhoneNumber
-        : formatNumber(alpha2, unformatNumber(`${callingCode}${phoneNumber}`)).intlPhoneNumber
+      const _intlPhoneNumber = formatNumber(alpha2, unformatNumber(`${callingCode}${phoneNumber}`)).intlPhoneNumber
       const validation = validateNumber(alpha2, _intlPhoneNumber)
       setSelectedCountry(country)
       setCallingCode(callingCode)
       setOpen(false)
       setTabbedIndex(-1)
-      setSearchTerm(searchTerm.trim())
+      setSearchTerm('')
       if (onClick) {
         setIntlPhoneNumber(_intlPhoneNumber)
       }
       if (onChange) {
         onChange({ country, validation, callingCode, phoneNumber, intlPhoneNumber: _intlPhoneNumber })
       }
+      populatePreferredCountries(country)
     } else {
       setSelectedCountry({})
       setCallingCode(null)
@@ -234,7 +240,7 @@ function PhoneInput({
     if (testNumber(unformattedNumber) && value !== callingCode && country) {
       const { alpha2 } = country
       const intlPhoneNumber = formatNumber(alpha2, unformattedNumber).intlPhoneNumber
-      const phoneNumber = getNationalNumber(alpha2, intlPhoneNumber)
+      const phoneNumber = getNationalNumber(country, intlPhoneNumber)
       const validation = validateNumber(alpha2, intlPhoneNumber)
       const { friendlyMessage, valid } = validation
       setIntlPhoneNumber(intlPhoneNumber)
@@ -266,12 +272,65 @@ function PhoneInput({
     }
   }
 
+  const populatePreferredCountries = country => {
+    if (Object.keys(country).length > 0) {
+      const preferred = assignedCountries.filter(c => country.alpha2 !== c.alpha2)
+      const regular = assignedCountries.filter(c => country.alpha2 === c.alpha2)
+      const orderedCountries = regular.concat(preferred)
+      setFilteredCountries(orderedCountries)
+      setPreferredCountries(orderedCountries)
+      setLastPreferred(orderedCountries[0])
+    }
+  }
+
+  const handleKeyDown = e => {
+    onKeyDown && onKeyDown(e)
+  }
+
+  const handleBlur = () => {
+    setLocalPlaceholder(placeholder)
+  }
+
+  const setDefaultCountry = () => {
+    const countryNotSelected = Object.keys(selectedCountry).length < 1 && selectedCountry !== 'unknown'
+    if (defaultCountry && countryNotSelected) {
+      const country = countryData.countries[defaultCountry]
+      selectCountry(country, false, true)
+    } else {
+      setFilteredCountries(assignedCountries)
+    }
+  }
+
   useEffect(() => {
+    setDefaultCountry()
     window.addEventListener('mousedown', pageClick)
     return () => {
       window.removeEventListener('mousedown', pageClick)
     }
   }, [])
+
+  // useEffect(() => {
+  //   if (value) {
+  //     const unformattedNumber = unformatNumber(value)
+  //     const phoneNoFormatted = new AsYouType().input(value)
+  //     const getCountryCallingCode = phoneNoFormatted.split(' ')[0]
+  //     const lookupCountry = this.lookupCountry(getCountryCallingCode.replace('+', ''))
+  //     const country = lookupCountry || (Object.keys(selectedCountry).length > 0 && selectedCountry)
+  //     const intlPhoneNumber = this.formatNumber(country.alpha2, unformattedNumber)
+  //     if (country) {
+  //       this.setState(
+  //         {
+  //           intlPhoneNumber
+  //         },
+  //         () => {
+  //           if (defaultCountry && countryNotSelected) {
+  //             this.selectCountry(country, true, false)
+  //           }
+  //         }
+  //       )
+  //     }
+  //   }
+  // }, [value])
 
   //   useEffect(() => {
   //     if (inputType === "tel") {
@@ -308,23 +367,22 @@ function PhoneInput({
       )} */}
       <div className="input-group">
         <div className="input-group-prepend">
-          <button
-            type="button"
-            tabIndex={0}
-            disabled={disabled}
-            aria-hidden
-            style={{
-              borderBottomLeftRadius: open ? 0 : null,
-              transition: 'background-color .25s, color .25s',
-              cursor: disabled ? null : 'pointer'
-            }}
-            className="btn btn-outline-secondary dropdown-toggle country-selector"
-            onClick={onOpenHandler}>
-            {flag && <FlagIcon code={flag} size={24} className="flag-icon" />}
-          </button>
+          <ButtonFlag type="button" tabIndex={0} disabled={disabled} aria-hidden error={error} onClick={onOpenHandler}>
+            {flag === 'WW' && <Globe size={24} weight="light" />}
+            {flag !== 'WW' && (
+              <img
+                width={24}
+                height={24}
+                src={`https://img.okadoc.com/photos/countries-circ/${flag.toLowerCase()}-circular.svg`}
+                alt="country flag circular"
+              />
+            )}
+          </ButtonFlag>
         </div>
-        <input
+        <TextInput
           id={inputId}
+          name={inputName}
+          data-test-id={dataTestId}
           autoComplete={'off'}
           aria-describedby={'validation-info'}
           type="text"
@@ -335,74 +393,105 @@ function PhoneInput({
             borderBottomLeftRadius: open ? 0 : null,
             borderBottomRightRadius: open ? 0 : null
           }}
-          placeholder={open ? placeholder : ''}
-          //   onKeyDown={(e) => this.onKeyDown(e)}
+          placeholder={localPlaceholder}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
           value={open ? searchTerm : intlPhoneNumber}
           disabled={disabled}
           onChange={handleChange}
         />
       </div>
-      <ul
+      <Dropdown
+        open={open}
         aria-hidden
         tabIndex={-1}
         ref={countryDropdownRef}
         className="dropdown-menu country-dropdown"
-        style={{
-          display: 'block',
-          zIndex: 101,
-          overflowX: 'auto',
-          marginTop: 0,
-          borderTopLeftRadius: 0,
-          borderTopRightRadius: 0,
-          maxHeight: open ? 400 : 0,
-          borderWidth: open ? 1 : 0,
-          padding: open ? '10px 0 10px 0' : 0,
-          transition: 'all 0.2s ease',
-          width: '100%',
-          borderTop: 'none'
-        }}>
+        maxHeight={maxHeight}>
         {filteredCountries &&
           filteredCountries.length > 0 &&
           filteredCountries.map((country, index) => {
             const { name, alpha2, countryCallingCodes } = country
+            const flag = missingFlags[alpha2] ? missingFlags[alpha2] : alpha2
             return (
-              <li
-                id={alpha2}
-                tabIndex={0}
-                onMouseEnter={() => setHoverIndex(index)}
-                onMouseLeave={() => setHoverIndex(NaN)}
-                className={`dropdown-item${tabbedIndex === index + 1 ? ' tabbed' : ''}`}
+              <DropdownList
                 key={`${alpha2}-${index}`}
-                style={{
-                  padding: 15,
-                  cursor: 'pointer',
-                  borderBottom:
-                    lastPreferred && lastPreferred.alpha2 === alpha2 && searchTerm === '' ? '1px solid #c1c1c1' : '',
-                  transition: 'background-color .25s, color .25s',
-                  backgroundColor: getBgColor(index, alpha2 === selectedCountry.alpha2)
-                }}
-                onClick={() => selectCountry(country, false, true)}>
-                <h6 style={{ margin: 0 }}>
-                  <FlagIcon
-                    style={{ marginRight: 10 }}
-                    code={missingFlags[alpha2] ? missingFlags[alpha2] : alpha2}
-                    size={30}
-                  />
-                  {name}&nbsp;
-                  {countryCallingCodes.map((code, index) => {
-                    return (
-                      <small className="text-muted" key={code}>
-                        {code}
-                      </small>
-                    )
-                  })}
-                </h6>
-              </li>
+                hasPreferredCountries={lastPreferred && lastPreferred.alpha2 === alpha2 && searchTerm === ''}>
+                <ListItem
+                  id={alpha2}
+                  tabIndex={0}
+                  onMouseEnter={() => setHoverIndex({ hoverIndex: index })}
+                  onMouseLeave={() => setHoverIndex({ hoverIndex: NaN })}
+                  style={{
+                    transition: bgColorTransitionStyle,
+                    backgroundColor: getBgColor(index, alpha2 === selectedCountry.alpha2)
+                  }}
+                  onClick={() => selectCountry(country, false, true)}>
+                  <div className="d-flex align-items-center">
+                    {!missingFlags[alpha2] && (
+                      <img
+                        className="mr-2"
+                        width={24}
+                        height={24}
+                        src={`https://img.okadoc.com/photos/countries-circ/${flag.toLowerCase()}-circular.svg`}
+                        alt="country flag circular"
+                      />
+                    )}
+                    {missingFlags[alpha2] && <Globe className="mr-2" size={30} weight="light" />}
+                    <div className="country-calling-code mr-2">{countryCallingCodes[0].split(' ')[0]}</div>
+                    <div className="country-name">{name}</div>
+                  </div>
+                </ListItem>
+              </DropdownList>
             )
           })}
-      </ul>
+      </Dropdown>
     </div>
   )
+}
+
+PhoneInput.defaultProps = {
+  noResultsMessage: 'No results available',
+  paginateText: 'Display additional results...',
+  paginate: 50,
+  placeholder: 'Search Country',
+  maxHeight: 300,
+  defaultCountry: '',
+  disabled: false,
+  minLengthMessage: 'Too short to be a valid phone number',
+  maxLengthMessage: 'Too long to be a valid phone number',
+  callingCodeMessage: 'Please select a valid country code',
+  catchAllMessage: 'Not a valid phone number',
+  validMessage: 'This phone number is valid',
+  autoFocus: false,
+  error: false,
+  inputName: 'Phone Number',
+  id: 'phoneNumber',
+  dataTestId: 'inpPhoneNumberLogin'
+}
+
+PhoneInput.propTypes = {
+  value: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  noResultsMessage: PropTypes.oneOfType([PropTypes.element, PropTypes.string]),
+  paginateText: PropTypes.oneOfType([PropTypes.element, PropTypes.string]),
+  paginate: PropTypes.number,
+  disabled: PropTypes.bool,
+  placeholder: PropTypes.string,
+  maxHeight: PropTypes.number,
+  defaultCountry: PropTypes.string,
+  onChange: PropTypes.func,
+  onKeyDown: PropTypes.func,
+  minLengthMessage: PropTypes.string,
+  maxLengthMessage: PropTypes.string,
+  callingCodeMessage: PropTypes.string,
+  catchAllMessage: PropTypes.string,
+  inputClassName: PropTypes.string,
+  validMessage: PropTypes.string,
+  autoFocus: PropTypes.bool,
+  error: PropTypes.bool,
+  inputName: PropTypes.string,
+  id: PropTypes.string,
+  dataTestId: PropTypes.string
 }
 
 export default PhoneInput
