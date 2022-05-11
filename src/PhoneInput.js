@@ -26,7 +26,7 @@ function PhoneInput({
   value
 }) {
   const [inputType, setInputType] = useState('text')
-  const [searchTerm, setSearchTerm] = useState('')
+  const [isButtonFlagClicked, setIsButtonFlagClicked] = useState(false)
   const [intlPhoneNumber, setIntlPhoneNumber] = useState('')
   const [localPlaceholder, setLocalPlaceholder] = useState('')
   const [hoverIndex, setHoverIndex] = useState('text')
@@ -71,8 +71,8 @@ function PhoneInput({
       const searchCriteria = `${name} ${countryCallingCodes.join(' ')}`
       return new RegExp(escapeStringRegexp(value.trim()), 'gi').test(searchCriteria)
     })
-    setFilteredCountries(value.trim() === '' ? preferredCountries : filteredCountries)
-    setSearchTerm(value)
+    setFilteredCountries(value.trim() === '' ? assignedCountries : filteredCountries)
+    setOpen(filteredCountries.length > 0)
     setTabbedIndex(-1)
   }
 
@@ -173,9 +173,12 @@ function PhoneInput({
 
   const onOpenHandler = () => {
     if (!disabled) {
-      setOpen(!open)
+      setIsButtonFlagClicked(true)
+      setOpen(true)
       if (!open) {
-        phoneInputRef.current.focus()
+        setTimeout(() => {
+          phoneInputRef.current.focus()
+        }, 300)
       } else {
         setTabbedIndex(-1)
       }
@@ -193,6 +196,7 @@ function PhoneInput({
   const pageClick = () => {
     if (!mouseDownOnMenu.current) {
       setOpen(false)
+      setIsButtonFlagClicked(false)
       setTabbedIndex(-1)
       countryDropdownRef.current.scrollTop = 0
     }
@@ -202,18 +206,17 @@ function PhoneInput({
     if (Object.keys(country).length > 0) {
       const { countryCallingCodes, alpha2 } = country
       const callingCode = countryCallingCodes && countryCallingCodes[0]
-      const _intlPhoneNumber = formatNumber(alpha2, unformatNumber(`${callingCode}${phoneNumber}`)).intlPhoneNumber
-      const validation = validateNumber(alpha2, _intlPhoneNumber)
+      const { intlPhoneNumber } = formatNumber(alpha2, unformatNumber(`${callingCode}${phoneNumber}`))
+      const validation = validateNumber(alpha2, intlPhoneNumber)
       setSelectedCountry(country)
       setCallingCode(callingCode)
       setOpen(false)
       setTabbedIndex(-1)
-      setSearchTerm('')
       if (onClick) {
-        setIntlPhoneNumber(_intlPhoneNumber)
+        setIntlPhoneNumber(intlPhoneNumber)
       }
       if (onChange) {
-        onChange({ country, validation, callingCode, phoneNumber, intlPhoneNumber: _intlPhoneNumber })
+        onChange({ country, validation, callingCode, phoneNumber, intlPhoneNumber })
       }
       populatePreferredCountries(country)
     } else {
@@ -225,18 +228,18 @@ function PhoneInput({
         onChange({ phoneNumber: '', validation: validateNumber(null, ''), callingCode: '', intlPhoneNumber: '' })
       }
     }
-
-    if (!mounted) {
-      phoneInputRef.current.focus()
-    }
+    setIsButtonFlagClicked(false)
+    setTimeout(() => {
+      if (!mounted) {
+        phoneInputRef.current.focus()
+      }
+    }, 300)
   }
 
   const onChangePhone = (value = '', isDeleteContentBackward) => {
     const unformattedNumber = unformatNumber(value)
     const getCallingCode = formatNumber(null, unformattedNumber).callingCode
-    console.log(getCallingCode)
-    const theLookupCountry = lookupCountry(getCallingCode.replace('+', ''))
-    const country = theLookupCountry || (Object.keys(selectedCountry).length > 0 && selectedCountry)
+    const country = lookupCountry(getCallingCode.replace('+', ''))
     if (testNumber(unformattedNumber) && value !== callingCode && country) {
       const { alpha2 } = country
       const intlPhoneNumber = formatNumber(alpha2, unformattedNumber).intlPhoneNumber
@@ -258,18 +261,24 @@ function PhoneInput({
     }
 
     if (value === '') {
+      setOpen(true)
+      setPreferredCountries([])
+      setFilteredCountries(assignedCountries)
       selectCountry({})
+    }
+
+    if (!country) {
+      setSelectedCountry({})
+      setLastPreferred('')
+      setCallingCode(null)
     }
   }
 
   const handleChange = e => {
     const isDeleteContentBackward = e.nativeEvent.inputType === 'deleteContentBackward'
     const value = e.target.value
-    if (open) {
-      onChangeTypeAhead(value)
-    } else {
-      onChangePhone(value, isDeleteContentBackward)
-    }
+    onChangeTypeAhead(value)
+    onChangePhone(value, isDeleteContentBackward)
   }
 
   const populatePreferredCountries = country => {
@@ -285,6 +294,11 @@ function PhoneInput({
 
   const handleKeyDown = e => {
     onKeyDown && onKeyDown(e)
+  }
+
+  const handleFocus = e => {
+    setLocalPlaceholder('')
+    setOpen(isButtonFlagClicked || (!intlPhoneNumber && Object.keys(selectedCountry).length === 0))
   }
 
   const handleBlur = () => {
@@ -309,28 +323,22 @@ function PhoneInput({
     }
   }, [])
 
-  // useEffect(() => {
-  //   if (value) {
-  //     const unformattedNumber = unformatNumber(value)
-  //     const phoneNoFormatted = new AsYouType().input(value)
-  //     const getCountryCallingCode = phoneNoFormatted.split(' ')[0]
-  //     const lookupCountry = this.lookupCountry(getCountryCallingCode.replace('+', ''))
-  //     const country = lookupCountry || (Object.keys(selectedCountry).length > 0 && selectedCountry)
-  //     const intlPhoneNumber = this.formatNumber(country.alpha2, unformattedNumber)
-  //     if (country) {
-  //       this.setState(
-  //         {
-  //           intlPhoneNumber
-  //         },
-  //         () => {
-  //           if (defaultCountry && countryNotSelected) {
-  //             this.selectCountry(country, true, false)
-  //           }
-  //         }
-  //       )
-  //     }
-  //   }
-  // }, [value])
+  useEffect(() => {
+    if (value) {
+      const unformattedNumber = unformatNumber(value)
+      const phoneNoFormatted = new AsYouType().input(value)
+      const getCountryCallingCode = phoneNoFormatted.split(' ')[0]
+      const countryLookup = lookupCountry(getCountryCallingCode.replace('+', ''))
+      const country = countryLookup || (Object.keys(selectedCountry).length > 0 && selectedCountry)
+      const { intlPhoneNumber } = formatNumber(country.alpha2, unformattedNumber)
+      const phoneNumber = getNationalNumber(country, intlPhoneNumber)
+      if (country) {
+        selectCountry(country, false, false)
+        setIntlPhoneNumber(intlPhoneNumber)
+        setPhoneNumber(phoneNumber)
+      }
+    }
+  }, [value])
 
   //   useEffect(() => {
   //     if (inputType === "tel") {
@@ -395,8 +403,9 @@ function PhoneInput({
           }}
           placeholder={localPlaceholder}
           onKeyDown={handleKeyDown}
+          onFocus={handleFocus}
           onBlur={handleBlur}
-          value={open ? searchTerm : intlPhoneNumber}
+          value={intlPhoneNumber}
           disabled={disabled}
           onChange={handleChange}
         />
@@ -416,7 +425,7 @@ function PhoneInput({
             return (
               <DropdownList
                 key={`${alpha2}-${index}`}
-                hasPreferredCountries={lastPreferred && lastPreferred.alpha2 === alpha2 && searchTerm === ''}>
+                hasPreferredCountries={lastPreferred && lastPreferred.alpha2 === alpha2}>
                 <ListItem
                   id={alpha2}
                   tabIndex={0}
