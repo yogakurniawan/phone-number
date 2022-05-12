@@ -33,23 +33,18 @@ function PhoneInput({
   const [selectedCountry, setSelectedCountry] = useState({})
   const [open, setOpen] = useState(false)
   const [filteredCountries, setFilteredCountries] = useState([])
-  const [preferredCountries, setPreferredCountries] = useState([])
   const [tabbedIndex, setTabbedIndex] = useState(-1)
   const [lastPreferred, setLastPreferred] = useState()
   const [callingCode, setCallingCode] = useState()
   const [phoneNumber, setPhoneNumber] = useState('')
   const [message, setMessage] = useState('')
   const [valid, setValid] = useState(false)
-  // const [value, setValue] = useState('')
-  const inputTel = useRef()
-  const inputText = useRef()
   const mouseDownOnMenu = useRef()
   const countryDropdownRef = useRef()
   const phoneInputRef = useRef()
   const { alpha2 } = selectedCountry
   const missingFlags = { AQ: 'WW', BQ: 'NL', EH: 'WW-AFR', MF: 'FR', SH: 'GB' }
   const assignedCountries = countryData.callingCountries.all.filter(country => country.status === 'assigned')
-  const tabbedCountry = filteredCountries.length > 0 && filteredCountries[0].alpha2
   const bgColorTransitionStyle = 'background-color .25s, color .25s'
   const flag =
     (missingFlags[alpha2]
@@ -262,7 +257,6 @@ function PhoneInput({
 
     if (value === '') {
       setOpen(true)
-      setPreferredCountries([])
       setFilteredCountries(assignedCountries)
       selectCountry({})
     }
@@ -287,7 +281,6 @@ function PhoneInput({
       const regular = assignedCountries.filter(c => country.alpha2 === c.alpha2)
       const orderedCountries = regular.concat(preferred)
       setFilteredCountries(orderedCountries)
-      setPreferredCountries(orderedCountries)
       setLastPreferred(orderedCountries[0])
     }
   }
@@ -324,6 +317,10 @@ function PhoneInput({
   }, [])
 
   useEffect(() => {
+    setInputType(intlPhoneNumber.startsWith('+') ? 'tel' : 'text')
+  }, [intlPhoneNumber])
+
+  useEffect(() => {
     if (value) {
       const unformattedNumber = unformatNumber(value)
       const phoneNoFormatted = new AsYouType().input(value)
@@ -340,14 +337,6 @@ function PhoneInput({
     }
   }, [value])
 
-  //   useEffect(() => {
-  //     if (inputType === "tel") {
-  //       inputTel.current.focus();
-  //     } else {
-  //       inputText.current.focus();
-  //     }
-  //   }, [inputType]);
-
   return (
     <div
       style={{
@@ -355,24 +344,6 @@ function PhoneInput({
       }}
       onMouseDown={mouseDownHandler}
       onMouseUp={mouseUpHandler}>
-      {/* {inputType === "tel" && (
-        <input
-          ref={inputTel}
-          name="phone input"
-          type="tel"
-          value={value}
-          onChange={handleChange}
-        />
-      )}
-      {inputType === "text" && (
-        <input
-          ref={inputText}
-          name="phone input"
-          value={value}
-          type="text"
-          onChange={handleChange}
-        />
-      )} */}
       <div className="input-group">
         <div className="input-group-prepend">
           <ButtonFlag type="button" tabIndex={0} disabled={disabled} aria-hidden error={error} onClick={onOpenHandler}>
@@ -387,28 +358,54 @@ function PhoneInput({
             )}
           </ButtonFlag>
         </div>
-        <TextInput
-          id={inputId}
-          name={inputName}
-          data-test-id={dataTestId}
-          autoComplete={'off'}
-          aria-describedby={'validation-info'}
-          type="text"
-          ref={phoneInputRef}
-          className={`form-control phone-input${inputClassName ? inputClassName : ''}`}
-          style={{
-            paddingRight: 38,
-            borderBottomLeftRadius: open ? 0 : null,
-            borderBottomRightRadius: open ? 0 : null
-          }}
-          placeholder={localPlaceholder}
-          onKeyDown={handleKeyDown}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          value={intlPhoneNumber}
-          disabled={disabled}
-          onChange={handleChange}
-        />
+        {inputType === 'text' && (
+          <TextInput
+            id={inputId}
+            name={inputName}
+            data-test-id={dataTestId}
+            autoComplete={'off'}
+            aria-describedby={'validation-info'}
+            type="text"
+            ref={phoneInputRef}
+            className={`form-control phone-input${inputClassName ? inputClassName : ''}`}
+            style={{
+              paddingRight: 38,
+              borderBottomLeftRadius: open ? 0 : null,
+              borderBottomRightRadius: open ? 0 : null
+            }}
+            placeholder={localPlaceholder}
+            onKeyDown={handleKeyDown}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            value={intlPhoneNumber}
+            disabled={disabled}
+            onChange={handleChange}
+          />
+        )}
+        {inputType === 'tel' && (
+          <TextInput
+            id={inputId}
+            name={inputName}
+            data-test-id={dataTestId}
+            autoComplete={'off'}
+            aria-describedby={'validation-info'}
+            type="tel"
+            ref={phoneInputRef}
+            className={`form-control phone-input${inputClassName ? inputClassName : ''}`}
+            style={{
+              paddingRight: 38,
+              borderBottomLeftRadius: open ? 0 : null,
+              borderBottomRightRadius: open ? 0 : null
+            }}
+            placeholder={localPlaceholder}
+            onKeyDown={handleKeyDown}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            value={intlPhoneNumber}
+            disabled={disabled}
+            onChange={handleChange}
+          />
+        )}
       </div>
       <Dropdown
         open={open}
