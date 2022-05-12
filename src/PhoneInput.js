@@ -41,7 +41,7 @@ function PhoneInput({
   const [valid, setValid] = useState(false)
   const mouseDownOnMenu = useRef()
   const countryDropdownRef = useRef()
-  const phoneInputRef = useRef()
+  const phoneInputRef = React.createRef()
   const { alpha2 } = selectedCountry
   const missingFlags = { AQ: 'WW', BQ: 'NL', EH: 'WW-AFR', MF: 'FR', SH: 'GB' }
   const assignedCountries = countryData.callingCountries.all.filter(country => country.status === 'assigned')
@@ -294,7 +294,8 @@ function PhoneInput({
     setOpen(isButtonFlagClicked || (!intlPhoneNumber && Object.keys(selectedCountry).length === 0))
   }
 
-  const handleBlur = () => {
+  const handleBlur = e => {
+    e.preventDefault()
     setLocalPlaceholder(placeholder)
   }
 
@@ -319,6 +320,12 @@ function PhoneInput({
   useEffect(() => {
     setInputType(intlPhoneNumber.startsWith('+') ? 'tel' : 'text')
   }, [intlPhoneNumber])
+
+  useEffect(() => {
+    setTimeout(() => {
+      phoneInputRef.current.focus()
+    }, 100)
+  }, [inputType])
 
   useEffect(() => {
     if (value) {
@@ -363,9 +370,9 @@ function PhoneInput({
             id={inputId}
             name={inputName}
             data-test-id={dataTestId}
-            autoComplete={'off'}
-            aria-describedby={'validation-info'}
+            autoComplete="chrome-off"
             type="text"
+            dir="ltr"
             ref={phoneInputRef}
             className={`form-control phone-input${inputClassName ? inputClassName : ''}`}
             style={{
@@ -387,9 +394,9 @@ function PhoneInput({
             id={inputId}
             name={inputName}
             data-test-id={dataTestId}
-            autoComplete={'off'}
-            aria-describedby={'validation-info'}
+            autoComplete="chrome-off"
             type="tel"
+            dir="ltr"
             ref={phoneInputRef}
             className={`form-control phone-input${inputClassName ? inputClassName : ''}`}
             style={{
