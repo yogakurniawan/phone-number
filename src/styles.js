@@ -40,11 +40,12 @@ export const TextInput = styled.input`
 
 export const Dropdown = styled.ul`
     display: block;
+    position: absolute;
     z-index: 101;
     overflow: auto;
     border-radius: 4px;
     margin-top: 0;
-    transition: all 0.2s ease;
+    transition: all 0.1s ease-in-out;
     width: 100%;
     background-color: #fff;
     list-style: none;
@@ -80,4 +81,4 @@ export const ListItem = styled.div`
     .country-name {
         font-weight: bold;
     }
-` 
+`
